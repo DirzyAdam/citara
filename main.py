@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.translation_utils import translate_text_from_ID_to_EN
+from utils.translation_utils import translate_text_from_ID_to_EN, translate_text_from_EN_to_ID # Ditambahkan di sini
 from utils.pdf_utils import extract_text_by_page, is_valid_pdf
 from utils.similarity_utils import find_sentence_matches, find_paragraph_matches
 from utils.docx_utils import extract_text_from_docx
@@ -66,14 +66,21 @@ def validate_pdf(pdf_path, max_size_mb=20, max_pages=500):
     if file_size > max_size_mb:
         return False, f"Ukuran file PDF terlalu besar ({file_size:.1f} MB). Maksimal {max_size_mb} MB."
     try:
-        import PyPDF2
+        import PyPDF2 # Tetap menggunakan PyPDF2 untuk validasi awal jumlah halaman
         with open(pdf_path, "rb") as f:
             reader = PyPDF2.PdfReader(f)
             num_pages = len(reader.pages)
             if num_pages > max_pages:
                 return False, f"Jumlah halaman PDF terlalu banyak ({num_pages}). Maksimal {max_pages} halaman."
-    except Exception:
-        return False, "File PDF tidak valid atau corrupt."
+        
+        # Memanggil is_valid_pdf dari utils.pdf_utils untuk pemeriksaan korupsi
+        if not is_valid_pdf(pdf_path):
+            return False, "File PDF tidak valid atau corrupt (berdasarkan pemeriksaan utils.pdf_utils)."
+
+    except PyPDF2.errors.PdfReadError as e: # Menangkap error spesifik dari PyPDF2
+        return False, f"File PDF tidak dapat dibaca atau corrupt (PyPDF2 error: {e})."
+    except Exception as e: # Menangkap error umum lainnya
+        return False, f"Terjadi error saat validasi PDF: {e}."
     return True, ""
 
 def run_app():
@@ -130,19 +137,14 @@ def run_app():
                 # Proses file sumber (PDF atau Word)
                 file_ext = os.path.splitext(uploaded_source.name)[1].lower()
                 if file_ext == ".pdf":
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
-                        tmp_pdf.write(uploaded_source.read())
-                        source_path = tmp_pdf.name
-                    # Validasi PDF
+                    source_path = process_pdf(uploaded_source) # Menggunakan fungsi process_pdf
+                    # Validasi PDF (sekarang digabungkan)
                     valid, msg = validate_pdf(source_path)
                     if not valid:
                         st.error(msg)
                         os.unlink(source_path)
                         st.stop()
-                    if not is_valid_pdf(source_path):
-                        st.error("File PDF tidak valid atau corrupt.")
-                        os.unlink(source_path)
-                        st.stop()
+                    
                     pages_text = extract_text_by_page(source_path)
                     if not pages_text:
                         st.error("Tidak dapat mengekstrak teks dari file PDF.")
@@ -173,7 +175,6 @@ def run_app():
                             citation_for_compare = translate_text_from_ID_to_EN(citation_text, use_local=use_local)
                             translation_info = f"(Sitasi diterjemahkan dari Bahasa Indonesia ke Bahasa Inggris)"
                         elif citation_lang_code == "EN" and source_lang_code == "ID":
-                            from utils.translation_utils import translate_text_from_EN_to_ID
                             citation_for_compare = translate_text_from_EN_to_ID(citation_text, use_local=use_local)
                             translation_info = f"(Sitasi diterjemahkan dari Bahasa Inggris ke Bahasa Indonesia)"
                     except Exception as e:

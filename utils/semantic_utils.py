@@ -1,6 +1,13 @@
 import nltk
 
-nltk.download('punkt', quiet=True)
+try:
+    nltk.data.find('tokenizers/punkt')
+except nltk.downloader.DownloadError: # More specific exception for missing resource
+    print("NLTK 'punkt' tokenizer not found. Downloading...")
+    nltk.download('punkt', quiet=True)
+except LookupError: # Fallback for older NLTK versions or other lookup issues
+    print("NLTK 'punkt' tokenizer not found (LookupError). Downloading...")
+    nltk.download('punkt', quiet=True)
 
 def get_semantic_model():
     from sentence_transformers import SentenceTransformer

@@ -1,2 +1,2 @@
 [server]
-fileWatcherType = "watchfiles"
+folderWatchBlacklist = ["d:/1_MyProject/python for natural language/1_citation-checker/.venv/Lib/site-packages/torch"]
