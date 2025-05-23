@@ -10,3 +10,4 @@ transformers
 torch
 sentencepiece
 streamlit
+python-docx
