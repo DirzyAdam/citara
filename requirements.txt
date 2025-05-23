@@ -1,0 +1,12 @@
+python-dotenv
+deepl
+PyPDF2
+numpy
+scikit-learn
+nltk
+sentence-transformers
+PyMuPDF
+transformers
+torch
+sentencepiece
+streamlit
