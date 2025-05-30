@@ -1,50 +1,132 @@
-# Citation Checker
+# Citara
 
-Aplikasi sederhana untuk memeriksa kemiripan teks kutipan/paragraf dengan isi dokumen PDF. Aplikasi ini menggunakan model pembelajaran mesin untuk menghitung kesamaan teks dan mendukung terjemahan antar bahasa.
+**Citara** adalah aplikasi yang dirancang untuk membantu akademisi, peneliti, mahasiswa maupun orang-orang yang memiliki jiwa skeptis dalam memverifikasi keaslian dan kesamaan kutipan teks terhadap dokumen sumber. Aplikasi ini memanfaatkan model *machine learning* untuk analisis kemiripan teks yang mendalam, mendukung pemrosesan dokumen PDF dan Word, serta dilengkapi kemampuan terjemahan antar bahasa (Indonesia-Inggris) untuk fleksibilitas maksimal.
+
+Dengan antarmuka pengguna yang intuitif berbasis web menggunakan Streamlit, Citara memudahkan proses validasi kutipan dan memastikan integritas akademik dalam pekerjaan Anda.
+
+## Mengapa Citara?
+
+Dalam dunia akademik dan penulisan ilmiah, akurasi sitasi adalah kunci. Aplikasi ini bertujuan untuk:
+- **Memastikan Keaslian**: Verifikasi apakah sebuah kutipan benar-benar berasal dari bagian tertentu dalam dokumen sumber.
+- **Mengukur Kemiripan**: Memberikan skor kuantitatif mengenai seberapa mirip teks kutipan dengan konten sumber, baik secara leksikal maupun semantik.
+- **Mendukung Penelitian Multi-Bahasa**: Memfasilitasi pengecekan sumber yang mungkin berbeda bahasa dengan kutipan yang sedang dianalisis.
+- **Mempermudah Alur Kerja**: Menyediakan alat bantu yang mudah digunakan untuk mempercepat proses pengecekan referensi.
 
 ## Fitur Utama
-- **Pemeriksaan Kutipan**: Periksa kesamaan teks kutipan/paragraf dengan dokumen PDF.
-- **Dukungan Multi-Bahasa**: Terjemahkan teks antara Bahasa Indonesia dan Bahasa Inggris.
-- **Ekstraksi Teks**: Ekstrak teks dari file PDF dan dokumen Word.
-- **Antarmuka Pengguna**: Antarmuka berbasis web menggunakan Streamlit.
+
+-   **Pemeriksaan Kutipan Komprehensif**:
+    -   Analisis kemiripan antara teks kutipan (kalimat atau paragraf) dengan konten dokumen sumber (PDF atau DOCX).
+    -   Dua mode perbandingan:
+        -   **TF-IDF**: Metode statistik klasik untuk menilai pentingnya kata dalam dokumen, cocok untuk menemukan kecocokan kata kunci.
+        -   **Semantik (Sentence-BERT)**: Menggunakan model *deep learning* untuk memahami makna dan konteks, ideal untuk mendeteksi kesamaan konseptual meskipun susunan kata berbeda (misalnya, parafrase).
+    -   Pilihan untuk memeriksa berdasarkan **Kalimat** atau **Paragraf** untuk granularitas yang berbeda.
+-   **Dukungan Multi-Bahasa (Indonesia & Inggris)**:
+    -   Terjemahkan teks kutipan atau sumber secara otomatis antara Bahasa Indonesia dan Bahasa Inggris sebelum perbandingan.
+    -   Opsi penggunaan **DeepL API** (memerlukan API Key) untuk terjemahan berkualitas tinggi atau **model terjemahan lokal** (MarianMT) untuk penggunaan offline atau tanpa API Key.
+-   **Ekstraksi Teks dari Berbagai Format**:
+    -   Ekstrak teks secara efisien dari file **PDF** (per halaman).
+    -   Ekstrak teks dari file **Microsoft Word (.docx)**.
+-   **Antarmuka Pengguna Interaktif**:
+    -   Dibangun menggunakan **Streamlit** untuk kemudahan penggunaan dan visualisasi hasil.
+    -   Pengaturan yang dapat disesuaikan: threshold kemiripan, mode pemeriksaan, metode perbandingan, dan pilihan terjemahan.
+-   **Visualisasi Hasil**:
+    -   Tampilkan segmen teks yang cocok dari dokumen sumber beserta skor kemiripannya.
+    -   Urutkan hasil berdasarkan skor kemiripan atau nomor halaman.
+
+
+## Teknologi Utama
+
+Aplikasi ini dibangun menggunakan teknologi dan pustaka Python berikut:
+-   **Streamlit**: Untuk membangun antarmuka pengguna web interaktif.
+-   **Sentence-Transformers (Sentence-BERT)**: Untuk embedding kalimat dan perhitungan kemiripan semantik.
+-   **Scikit-learn**: Untuk metode TF-IDF dan perhitungan kemiripan kosinus.
+-   **PyMuPDF (Fitz)** & **PyPDF2**: Untuk ekstraksi teks dan manipulasi file PDF.
+-   **python-docx**: Untuk ekstraksi teks dari file Microsoft Word.
+-   **NLTK**: Untuk tokenisasi kalimat.
+-   **DeepL API Client** & **Transformers (MarianMT)**: Untuk fungsionalitas terjemahan.
 
 ## Persiapan
-1. Pastikan Anda sudah memasang Python 3.8+.
-2. Buat virtual environment (opsional):
-   ```
-   python -m venv venv
-   source venv/bin/activate  # atau venv\Scripts\activate di Windows
-   ```
-3. Install paket yang dibutuhkan:
-   ```
-   pip install -r requirements.txt
-   ```
 
-## Cara Menjalankan
-1. Buka terminal di direktori project.
-2. Jalankan Streamlit:
-   ```
-   streamlit run main.py
-   ```
-3. Akses aplikasi di browser sesuai alamat yang ditampilkan (biasanya http://localhost:8501).
+1.  **Prasyarat**:
+    -   Pastikan Anda sudah memasang Python 3.8+ di sistem Anda.
+    -   (Sangat Direkomendasikan) Buat dan aktifkan *virtual environment* untuk isolasi dependensi proyek:
+        ```bash
+        python -m venv venv
+        # Untuk Linux/macOS
+        source venv/bin/activate
+        # Untuk Windows
+        # venv\Scripts\activate
+        ```
+
+2.  **Instalasi Dependensi**:
+    -   Klon repositori ini (jika belum).
+    -   Instal semua paket yang dibutuhkan menggunakan file `requirements.txt`:
+        ```bash
+        pip install -r requirements.txt
+        ```
+    -   Pastikan Anda telah meninjau `requirements.txt` untuk versi pustaka yang spesifik jika mengalami masalah kompatibilitas.
+
+3.  **Konfigurasi API Key (Opsional, untuk Terjemahan DeepL)**:
+    -   Jika Anda ingin menggunakan layanan terjemahan DeepL, Anda memerlukan API Key.
+    -   Anda dapat menyetel *environment variable* `DeepL_API_KEY` dengan kunci Anda.
+    -   Alternatifnya, Anda dapat memasukkan API Key langsung melalui antarmuka pengguna aplikasi saat pertama kali dijalankan.
+
+## Cara Menjalankan Aplikasi
+
+1.  Buka terminal atau command prompt.
+2.  Arahkan ke direktori utama proyek tempat file `main.py` berada.
+3.  Pastikan *virtual environment* Anda (jika dibuat) sudah aktif.
+4.  Jalankan aplikasi menggunakan Streamlit:
+    ```bash
+    streamlit run main.py
+    ```
+5.  Aplikasi akan otomatis terbuka di browser web default Anda. Jika tidak, buka browser dan arahkan ke alamat yang ditampilkan di terminal (biasanya `http://localhost:8501`).
+
+## Contoh Alur Penggunaan
+
+1.  **Unggah Dokumen Sumber**: Pilih dan unggah file PDF atau DOCX yang ingin Anda jadikan referensi.
+2.  **Masukkan Teks Kutipan**: Ketik atau salin-tempel teks kutipan yang ingin Anda periksa.
+3.  **Atur Bahasa**: Tentukan bahasa teks kutipan dan bahasa dokumen sumber. Jika berbeda, aplikasi akan menawarkan terjemahan.
+4.  **Konfigurasi Pengaturan (di Sidebar)**:
+    -   Sesuaikan **Threshold Kemiripan** (misalnya, 0.6 untuk kemiripan 60%).
+    -   Pilih **Mode Pemeriksaan** ("Kalimat" atau "Paragraf").
+    -   Pilih **Metode Perbandingan** ("TF-IDF" atau "Semantic").
+    -   Pilih apakah akan menggunakan **Model Terjemahan Lokal** atau DeepL API.
+5.  **Mulai Pemeriksaan**: Klik tombol "Periksa Kutipan".
+6.  **Lihat Hasil**: Aplikasi akan menampilkan daftar segmen teks dari dokumen sumber yang cocok dengan kutipan Anda, beserta skor kemiripan dan nomor halaman/bagian. Anda dapat mengurutkan hasil sesuai kebutuhan.
 
 ## Struktur Proyek
 ```
-1_citation-checker/
-├── main.py                # File utama untuk menjalankan aplikasi
-├── requirements.txt       # Daftar dependensi Python
-├── utils/                 # Modul utilitas untuk PDF, Word, dan lainnya
-│   ├── docx_utils.py      # Fungsi untuk memproses dokumen Word
-│   ├── pdf_utils.py       # Fungsi untuk memproses file PDF
-│   ├── semantic_utils.py  # Fungsi untuk analisis semantik
-│   ├── similarity_utils.py# Fungsi untuk menghitung kesamaan teks
-│   ├── translation_utils.py # Fungsi untuk terjemahan teks
-├── sample_pdf/            # Contoh file PDF untuk pengujian
-└── .streamlit/            # Konfigurasi Streamlit
+citara/
+├── main.py                   # Titik masuk utama aplikasi Streamlit
+├── requirements.txt          # Daftar dependensi Python
+├── utils/                      # Direktori berisi modul-modul utilitas
+│   ├── docx_utils.py         # Fungsi untuk memproses file .docx
+│   ├── pdf_utils.py          # Fungsi untuk memproses file .pdf
+│   ├── semantic_utils.py     # Fungsi terkait analisis semantik dan model Sentence-BERT
+│   ├── similarity_utils.py   # Fungsi untuk menghitung berbagai jenis kemiripan teks
+│   └── translation_utils.py  # Fungsi untuk terjemahan teks (DeepL & model lokal)
+├── sample_pdf/               # (Opsional) Contoh file PDF untuk pengujian
+├── .streamlit/               # (Opsional) Direktori konfigurasi Streamlit
+└── README.md                 # File yang sedang Anda baca ini
 ```
 
+## Tampil Antarmuka Pengguna (UI)
+
+![Contoh Screenshot Aplikasi Citation Checker](UI.png)
+
 ## Kontribusi
-Kontribusi sangat diterima! Silakan buat pull request atau laporkan masalah di [repository ini](#).
+
+Masukan, laporan bug, dan kontribusi dalam bentuk *pull request* sangat kami hargai! Jika Anda menemukan masalah atau memiliki ide untuk peningkatan, silakan buat *issue* atau *pull request* di repositori proyek ini.
+
+## Potensi Pengembangan di Masa Depan
+
+Proyek ini memiliki potensi untuk dikembangkan lebih lanjut dengan fitur-fitur seperti:
+-   Integrasi dengan basis data akademik (CrossRef, PubMed, dll.) untuk validasi sumber otomatis.
+-   Pemeriksaan akurasi sitasi yang dihasilkan oleh Model Bahasa Besar (LLM), termasuk deteksi "halusinasi" sumber.
+-   Analisis konteks sitasi untuk memahami bagaimana sebuah sumber dikutip (mendukung, menentang, menyebutkan).
+-   Fitur anotasi dokumen yang lebih canggih.
 
 ## Lisensi
-Proyek ini dilisensikan di bawah [MIT License](LICENSE).
+
+Proyek ini dilisensikan di bawah [MIT License](LICENSE.md)

@@ -1,0 +1,7 @@
+[server]
+fileWatcherType = "auto"
+folderWatchBlacklist = ["d:/1_MyProject/python for natural language/citara/.venv/Lib/site-packages"]
+
+[theme]
+base="light"
+primaryColor="#1e90ff"

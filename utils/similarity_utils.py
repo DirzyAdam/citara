@@ -2,42 +2,39 @@ import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Fungsi generik yang direfaktor
 def _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, text_splitter_func):
+    """
+    Fungsi generik untuk mencari kemiripan antara citation_text dan setiap unit (kalimat/paragraf) pada pages_text.
+    """
     matches = []
     total_pages = len(pages_text)
-
     semantic_model = None
     if method == "semantic":
         from utils.semantic_utils import get_semantic_model, compute_semantic_similarity_batch
         semantic_model = get_semantic_model()
-    
     vectorizer = None
     if method == "tfidf":
         vectorizer = TfidfVectorizer()
-
     for idx, (page, text) in enumerate(pages_text.items()):
         if not text:
             if progress_callback:
                 progress_callback(idx + 1, total_pages)
             continue
-        
-        text_units = text_splitter_func(text) # Menggunakan text_splitter_func
+        text_units = text_splitter_func(text)
         if not text_units:
             if progress_callback:
                 progress_callback(idx + 1, total_pages)
             continue
-
         if method == "semantic":
-            if semantic_model is None: # Defensive check
-                 from utils.semantic_utils import get_semantic_model, compute_semantic_similarity_batch
-                 semantic_model = get_semantic_model()
+            if semantic_model is None:
+                from utils.semantic_utils import get_semantic_model, compute_semantic_similarity_batch
+                semantic_model = get_semantic_model()
             scores = compute_semantic_similarity_batch(citation_text, text_units, semantic_model)
             for unit, cos_sim in zip(text_units, scores):
                 if cos_sim >= similarity_threshold:
                     matches.append((page, unit, float(cos_sim)))
-        else: # tfidf
-            if vectorizer is None: # Defensive check
+        else:
+            if vectorizer is None:
                 vectorizer = TfidfVectorizer()
             for unit in text_units:
                 corpus = [citation_text, unit]
@@ -60,10 +57,10 @@ def find_sentence_matches(citation_text, pages_text, similarity_threshold=0.6, m
 
 def find_paragraph_matches(citation_text, pages_text, similarity_threshold=0.6, method="tfidf", progress_callback=None):
     """
-    Membagi teks per halaman menjadi paragraf (asumsi paragraf dipisahkan oleh "\\\\n\\\\n")
+    Membagi teks per halaman menjadi paragraf (asumsi paragraf dipisahkan oleh "\\n\\n")
     dan menghitung cosine similarity antara teks sitasi (hasil terjemahan)
     dengan tiap paragraf PDF.
     """
     def paragraph_splitter(text_content):
-        return [p.strip() for p in text_content.split("\\n\\n") if p.strip()]
+        return [p.strip() for p in text_content.split("\n\n") if p.strip()]
     return _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, paragraph_splitter)

@@ -1,19 +1,17 @@
 import PyPDF2
-import fitz  # PyMuPDF
+import fitz
 
 def is_valid_pdf(filepath):
     """Validasi file PDF menggunakan PyMuPDF (fitz)."""
-    doc = None  # Inisialisasi doc ke None
+    doc = None
     try:
         doc = fitz.open(filepath)
-        # Melakukan operasi dasar, misalnya cek jumlah halaman, bisa ditambahkan jika perlu
-        # Untuk validasi dasar, pembukaan file saja sudah cukup untuk menangkap banyak error.
         return True
-    except Exception: # Menangkap semua jenis exception yang mungkin terjadi saat membuka file
+    except Exception:
         return False
     finally:
         if doc:
-            doc.close() # Pastikan dokumen ditutup jika berhasil dibuka
+            doc.close()
 
 def extract_text_by_page(pdf_path):
     """
@@ -23,7 +21,7 @@ def extract_text_by_page(pdf_path):
     """
     pages_text = {}
     try:
-        doc = fitz.open(pdf_path)  # Menggunakan fitz untuk membuka PDF
+        doc = fitz.open(pdf_path)
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             pages_text[page_num + 1] = page.get_text("text")
@@ -31,7 +29,6 @@ def extract_text_by_page(pdf_path):
         return pages_text
     except Exception as e:
         print(f"Error membaca file PDF dengan PyMuPDF: {e}")
-        # Fallback ke PyPDF2 jika PyMuPDF gagal, atau hapus fallback jika tidak diinginkan
         print("Mencoba dengan PyPDF2 sebagai fallback...")
         try:
             with open(pdf_path, "rb") as f:
@@ -47,7 +44,11 @@ def extract_text_by_page(pdf_path):
 def highlight_matches_in_pdf(pdf_path, matches, output_path):
     """
     Highlight hasil pencocokan pada file PDF.
-    matches: list of (page, text, similarity)
+    
+    Parameters:
+    - pdf_path: str, path ke file PDF sumber.
+    - matches: list of tuples, setiap tuple berisi (nomor_halaman, teks, kesamaan).
+    - output_path: str, path untuk menyimpan file PDF yang sudah di-highlight.
     """
     doc = fitz.open(pdf_path)
     for page_num, text, _ in matches:

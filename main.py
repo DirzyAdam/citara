@@ -1,131 +1,127 @@
+from ui import sidebar_settings, show_matches
+from handlers import process_pdf, validate_pdf
 import streamlit as st
-from utils.translation_utils import translate_text_from_ID_to_EN, translate_text_from_EN_to_ID # Ditambahkan di sini
-from utils.pdf_utils import extract_text_by_page, is_valid_pdf
+from utils.translation_utils import translate_text_from_ID_to_EN, translate_text_from_EN_to_ID
+from utils.pdf_utils import extract_text_by_page
 from utils.similarity_utils import find_sentence_matches, find_paragraph_matches
 from utils.docx_utils import extract_text_from_docx
-import tempfile
 import os
 
-def sidebar_settings():
-    st.header("Pengaturan")
-    # Pengaturan API Key DeepL
-    api_key = st.text_input("DeepL API Key", type="password", value=os.getenv("DeepL_API_KEY", ""))
-    if api_key:
-        os.environ["DeepL_API_KEY"] = api_key
-
-    threshold = st.slider("Threshold Kemiripan", 0.0, 1.0, 0.6, 0.01)
-    mode = st.radio("Mode Pemeriksaan", ["Kalimat", "Paragraf"])
-    method = st.radio(
-        "Metode Perbandingan",
-        [
-            "TF-IDF",
-            "Semantic"
-        ],
-        index=1,
-        help="TF-IDF (Term Frequency-Inverse Document Frequency) adalah metode statistik untuk menilai seberapa penting sebuah kata dalam dokumen relatif terhadap kumpulan dokumen lain.\n\nSemantic: Menggunakan model deep learning (Sentence-BERT) untuk memahami makna kalimat, cocok untuk kemiripan makna, bukan hanya kata."
-    )
-    use_local = st.checkbox("Gunakan Model Lokal (offline)", value=False)
-    sort_option = st.radio(
-        "Urutkan Hasil Berdasarkan",
-        ["Tingkat Kemiripan (desc)", "Urutan Halaman (asc)"],
-        index=0,
-        help="Pilih cara pengurutan hasil pencocokan."
-    )
-    st.caption("Aplikasi ini responsif dan dapat digunakan di perangkat mobile maupun desktop.")
-    return threshold, mode, method, use_local, sort_option
-
-def process_pdf(uploaded_pdf):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
-        tmp_pdf.write(uploaded_pdf.read())
-        pdf_path = tmp_pdf.name
-    return pdf_path
-
-def show_matches(matches, tipe_cek, method, sort_option):
-    st.subheader("Hasil Pencocokan")
-    # Sorting
-    if sort_option == "Tingkat Kemiripan (desc)":
-        matches = sorted(matches, key=lambda x: x[2], reverse=True)
-    else:
-        matches = sorted(matches, key=lambda x: x[0])
-    if matches:
-        st.success(f"Ditemukan kemiripan pada {tipe_cek} (metode: {method}):")
-        for page, text_match, sim in matches:
-            st.markdown(
-                f"""
-                <div style="background-color:#eaf3fb; border-left:5px solid #1E90FF; padding:10px; margin-bottom:10px;">
-                <b>Halaman {page}</b> &nbsp; | &nbsp; <b>Kemiripan:</b> <span style="color:#1E90FF;">{sim:.2f}</span><br>
-                <span style="color:#222;">{text_match}</span>
-                </div>
-                """, unsafe_allow_html=True
-            )
-    else:
-        st.info(f"Tidak ditemukan kemiripan signifikan pada {tipe_cek} dengan metode {method}.")
-
-def validate_pdf(pdf_path, max_size_mb=20, max_pages=500):
-    file_size = os.path.getsize(pdf_path) / (1024 * 1024)
-    if file_size > max_size_mb:
-        return False, f"Ukuran file PDF terlalu besar ({file_size:.1f} MB). Maksimal {max_size_mb} MB."
-    try:
-        import PyPDF2 # Tetap menggunakan PyPDF2 untuk validasi awal jumlah halaman
-        with open(pdf_path, "rb") as f:
-            reader = PyPDF2.PdfReader(f)
-            num_pages = len(reader.pages)
-            if num_pages > max_pages:
-                return False, f"Jumlah halaman PDF terlalu banyak ({num_pages}). Maksimal {max_pages} halaman."
-        
-        # Memanggil is_valid_pdf dari utils.pdf_utils untuk pemeriksaan korupsi
-        if not is_valid_pdf(pdf_path):
-            return False, "File PDF tidak valid atau corrupt (berdasarkan pemeriksaan utils.pdf_utils)."
-
-    except PyPDF2.errors.PdfReadError as e: # Menangkap error spesifik dari PyPDF2
-        return False, f"File PDF tidak dapat dibaca atau corrupt (PyPDF2 error: {e})."
-    except Exception as e: # Menangkap error umum lainnya
-        return False, f"Terjadi error saat validasi PDF: {e}."
-    return True, ""
-
 def run_app():
-    st.set_page_config(page_title="Citation Checker", layout="wide", page_icon="🔎")
-    st.markdown(
-        """
-        <style>
-        .main {background-color: #ffffff;}
-        .stTextArea textarea {background-color: #ffffff !important; color: #1E2A40 !important;}
-        .stTextInput input {background-color: #ffffff !important; color: #1E2A40 !important;}
-        .stButton>button {
-            background-color: #1E90FF;
-            color: #ffffff;
-            border-radius: 6px;
-            border: none;
-        }
-        .stButton>button:hover {
-            background-color: #1565c0;
-            color: #ffffff;
-        }
-        .stFileUploader {background-color: #ffffff;}
-        .stApp {background-color: #ffffff;}
-        </style>
-        """, unsafe_allow_html=True
-    )
+    st.set_page_config(page_title="Citara", layout="wide", page_icon="assets/logo-c.PNG")
 
-    st.title("🔎 Citation Checker")
-    st.markdown(
-        "<h3 style='color:#1E90FF;'>Cek kemiripan kutipan/paragraf dengan sumber PDF/DOCX secara otomatis.</h3>",
-        unsafe_allow_html=True
-    )
-
+    # --- SIDEBAR ---
     with st.sidebar:
         threshold, mode, method, use_local, sort_option = sidebar_settings()
 
-    st.subheader("Teks Sitasi")
-    lang_options = {"Bahasa Indonesia": "ID", "Bahasa Inggris": "EN"}
-    citation_lang = st.selectbox("Bahasa Teks Sitasi", list(lang_options.keys()), index=0)
-    citation_text = st.text_area("Masukkan teks sitasi", height=120, key="citation_input")
+    # --- MAIN LAYOUT ---
+    st.markdown("""
+        <style>
+        /* Perkecil padding konten utama agar lebih rapat dan efisien */
+        .main .block-container {
+            padding-top: 0.3rem !important;
+            padding-bottom: 1.2rem !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+        /* Logo Citara di tengah layar */
+        .citara-logo-center {
+            display: flex;
+            justify-content: center !important;
+            align-items: center;
+            width: 100%;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            padding-left: 0 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    st.markdown("""
+        <div class='citara-logo-center'>
+            <div style='display: flex; justify-content: center; align-items: center; width: 100%;'>
+                <div style='max-width:60vw;'>
+    """, unsafe_allow_html=True)
+    import pathlib
+    logo_svg = pathlib.Path("assets/logo-citara.svg")
+    logo_png = pathlib.Path("assets/logo-citara.PNG")
+    if logo_svg.exists():
+        with open(logo_svg, "r", encoding="utf-8") as f:
+            svg_content = f.read()
+        # Tambahkan style langsung ke SVG agar width dan height sedikit lebih besar (misal 80px)
+        import re
+        svg_content = re.sub(r'<svg([^>]*)>', r'<svg\1 width="80" height="80">', svg_content, count=1)
+        st.markdown(svg_content, unsafe_allow_html=True)
+    else:
+        st.image(str(logo_png), use_container_width=False, width=80)
+    st.markdown("""
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
-    st.subheader("Upload File Sumber")
-    source_lang = st.selectbox("Bahasa Sumber", list(lang_options.keys()), index=0, key="pdf_source_lang")
-    uploaded_source = st.file_uploader("Pilih file sumber (PDF atau Word)", type=["pdf", "docx"])
+    st.markdown("""
+        <h3 style='color:#1E90FF;text-align:center;'>Cek kemiripan kutipan/paragraf dengan sumber PDF/DOCX secara otomatis.</h3>
+    """, unsafe_allow_html=True)
 
-    process = st.button("Proses")
+    col1, col2 = st.columns([1.5, 1])
+    with col1:
+        st.subheader("Teks Sitasi")
+        lang_options = {"Bahasa Indonesia": "ID", "Bahasa Inggris": "EN"}
+        # Hilangkan margin bawah pada selectbox agar label textarea dan file uploader sejajar
+        st.markdown("""
+        <style>
+        div[data-baseweb='select'] > div {
+            margin-bottom: 0 !important;
+        }
+        .stTextArea textarea#citation_input {
+            width: 100% !important;
+            min-width: 48vw !important;
+            max-width: 100vw !important;
+            min-height: 120px !important;
+            max-height: 60vh !important;
+            height: auto !important;
+            font-size: 1.1rem;
+            resize: vertical !important;
+        }
+        /* Samakan posisi y label input sitasi dan file uploader */
+        .stTextArea label[for='citation_input'] {
+            margin-bottom: 0.5rem !important;
+            display: block;
+        }
+        .stFileUploader label[for='pdf_source_lang'] {
+            margin-bottom: 0.5rem !important;
+            display: block;
+        }
+        .stFileUploader label[for^='file_uploader'] {
+            margin-top: 2.2rem !important;
+            display: block;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        citation_lang = st.selectbox("Bahasa Teks Sitasi", list(lang_options.keys()), index=0)
+        citation_text = st.text_area("Masukkan teks sitasi", height=None, key="citation_input")
+    with col2:
+        st.subheader("Upload File Sumber")
+        # Hilangkan margin bawah pada selectbox dan file_uploader agar label sejajar dan komponen lebih rapat
+        st.markdown("""
+        <style>
+        div[data-baseweb='select'] > div {
+            margin-bottom: 0 !important;
+        }
+        .stFileUploader label[for^='file_uploader'] {
+            margin-bottom: 0.5rem !important;
+            margin-top: 0 !important;
+            display: block;
+        }
+        .stFileUploader div[data-testid='stFileUploaderDropzone'] {
+            margin-top: 0.5rem !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        source_lang = st.selectbox("Bahasa Sumber", list(lang_options.keys()), index=0, key="pdf_source_lang")
+        uploaded_source = st.file_uploader("Pilih file sumber (PDF atau Word)", type=["pdf", "docx"])
+
+    process = st.button("Proses", use_container_width=True)
 
     if process:
         if not citation_text.strip():
@@ -134,27 +130,22 @@ def run_app():
             st.warning("Pilih file sumber (PDF/Word)!")
         else:
             with st.spinner("Menerjemahkan dan memproses..."):
-                # Proses file sumber (PDF atau Word)
                 file_ext = os.path.splitext(uploaded_source.name)[1].lower()
                 if file_ext == ".pdf":
-                    source_path = process_pdf(uploaded_source) # Menggunakan fungsi process_pdf
-                    # Validasi PDF (sekarang digabungkan)
+                    source_path = process_pdf(uploaded_source)
                     valid, msg = validate_pdf(source_path)
                     if not valid:
                         st.error(msg)
                         os.unlink(source_path)
                         st.stop()
-                    
                     pages_text = extract_text_by_page(source_path)
                     if not pages_text:
                         st.error("Tidak dapat mengekstrak teks dari file PDF.")
                         os.unlink(source_path)
                         st.stop()
-                    # Untuk PDF, pages_text sudah sesuai
                 elif file_ext == ".docx":
                     try:
                         text = extract_text_from_docx(uploaded_source)
-                        # Simulasikan pages_text: 1 halaman saja
                         pages_text = {1: text}
                         source_path = None
                     except Exception as e:
@@ -164,7 +155,6 @@ def run_app():
                     st.error("Format file sumber tidak didukung. Hanya PDF dan Word (.docx).")
                     st.stop()
 
-                # Deteksi bahasa sumber dan target, lakukan translasi jika perlu
                 citation_for_compare = citation_text
                 translation_info = ""
                 citation_lang_code = lang_options[citation_lang]
@@ -187,7 +177,6 @@ def run_app():
 
                 st.info(f"**Sitasi yang digunakan untuk pencocokan:** {citation_for_compare}\n\n{translation_info}")
 
-                # Optimasi performa: warning untuk PDF besar
                 if len(pages_text) > 100:
                     st.warning("File sumber ini cukup besar, proses bisa memakan waktu lebih lama dari biasanya.")
 
@@ -213,8 +202,6 @@ def run_app():
                 if file_ext == ".pdf" and source_path:
                     os.unlink(source_path)
                 show_matches(matches, tipe_cek, method, sort_option)
-
-    # Unit test tetap di file terpisah (test_utils.py), pastikan semua fungsi modular sudah diuji.
 
 if __name__ == "__main__":
     run_app()
