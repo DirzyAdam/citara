@@ -2,6 +2,7 @@ import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from utils.semantic_utils import get_semantic_model, compute_semantic_similarity, compute_semantic_similarity_batch
+import concurrent.futures
 
 def _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, text_splitter_func):
     """
@@ -127,12 +128,12 @@ def find_crossunit_matches(citation_text, pages_text, similarity_threshold=0.6, 
     vectorizer = None
     if method == "tfidf":
         vectorizer = TfidfVectorizer()
-    for idx, (page, text) in enumerate(pages_text.items()):
+
+    def process_page(args):
+        idx, page, text = args
         # Pilih splitter sesuai mode
         if unit_mode == "sentence":
             def splitter(txt):
-                # Gunakan robust_sentence_splitter dari find_sentence_matches
-                import nltk
                 def robust_sentence_splitter(text_content):
                     if isinstance(text_content, list):
                         sentences = []
@@ -177,25 +178,36 @@ def find_crossunit_matches(citation_text, pages_text, similarity_threshold=0.6, 
                 return [p.strip() for p in re.split(r'\n\s*\n', txt) if p.strip()]
         units = splitter(text)
         if not units or len(units) < window_size:
-            if progress_callback:
-                progress_callback(idx + 1, total_pages)
-            continue
+            return []
         # Sliding window
-        for i in range(len(units) - window_size + 1):
-            window_text = " ".join(units[i:i+window_size])
-            if method == "semantic":
-                # Panggil compute_semantic_similarity dengan benar
-                score = float(compute_semantic_similarity(citation_text, window_text, semantic_model))
+        window_texts = [" ".join(units[i:i+window_size]) for i in range(len(units) - window_size + 1)]
+        results = []
+        if method == "semantic":
+            # Batch processing
+            scores = compute_semantic_similarity_batch(citation_text, window_texts, semantic_model)
+            for window_text, score in zip(window_texts, scores):
                 if score >= similarity_threshold:
-                    matches.append((page, window_text, score))
-            else:
+                    results.append((page, window_text, float(score)))
+        else:
+            for window_text in window_texts:
                 if vectorizer is None:
-                    vectorizer = TfidfVectorizer()
+                    local_vectorizer = TfidfVectorizer()
+                else:
+                    local_vectorizer = vectorizer
                 corpus = [citation_text, window_text]
-                vectors = vectorizer.fit_transform(corpus)
+                vectors = local_vectorizer.fit_transform(corpus)
                 cos_sim = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
                 if cos_sim >= similarity_threshold:
-                    matches.append((page, window_text, cos_sim))
-        if progress_callback:
-            progress_callback(idx + 1, total_pages)
+                    results.append((page, window_text, cos_sim))
+        return results
+
+    # Parallel processing per halaman
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        args_list = [(idx, page, text) for idx, (page, text) in enumerate(pages_text.items())]
+        future_to_idx = {executor.submit(process_page, args): args[0] for args in args_list}
+        for i, future in enumerate(concurrent.futures.as_completed(future_to_idx)):
+            page_results = future.result()
+            matches.extend(page_results)
+            if progress_callback:
+                progress_callback(i + 1, total_pages)
     return matches

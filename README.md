@@ -46,9 +46,6 @@ Dalam dunia akademik dan penulisan ilmiah, akurasi sitasi adalah kunci. Aplikasi
     -   Mode pemeriksaan kalimat dan paragraf kini menggunakan hasil parsing yang mengikuti struktur asli dokumen (berbasis blok layout PDF/DOCX, deteksi line wrapping, indentasi, dan judul/subjudul), bukan sekadar pemisahan dengan regex sederhana.
     -   Hal ini meningkatkan akurasi deteksi kemiripan dan meminimalisir kesalahan segmentasi.
 
--   **Catatan Visualisasi Heatmap/Highlight (Opsional)**:
-    -   (Opsional/future work) Visualisasi heatmap atau highlight kontribusi bagian sumber pada hasil sliding window dapat ditambahkan untuk memperjelas bagian mana yang paling berkontribusi pada kemiripan.
-
 ## Teknologi Utama
 
 Aplikasi ini dibangun menggunakan teknologi dan pustaka Python berikut:
