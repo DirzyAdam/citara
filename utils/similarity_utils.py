@@ -1,6 +1,7 @@
 import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from utils.semantic_utils import get_semantic_model, compute_semantic_similarity, compute_semantic_similarity_batch
 
 def _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, text_splitter_func):
     """
@@ -10,7 +11,6 @@ def _find_matches_generic(citation_text, pages_text, similarity_threshold, metho
     total_pages = len(pages_text)
     semantic_model = None
     if method == "semantic":
-        from utils.semantic_utils import get_semantic_model, compute_semantic_similarity_batch
         semantic_model = get_semantic_model()
     vectorizer = None
     if method == "tfidf":
@@ -26,9 +26,6 @@ def _find_matches_generic(citation_text, pages_text, similarity_threshold, metho
                 progress_callback(idx + 1, total_pages)
             continue
         if method == "semantic":
-            if semantic_model is None:
-                from utils.semantic_utils import get_semantic_model, compute_semantic_similarity_batch
-                semantic_model = get_semantic_model()
             scores = compute_semantic_similarity_batch(citation_text, text_units, semantic_model)
             for unit, cos_sim in zip(text_units, scores):
                 if cos_sim >= similarity_threshold:
@@ -50,17 +47,155 @@ def find_sentence_matches(citation_text, pages_text, similarity_threshold=0.6, m
     """
     Membagi teks per halaman menjadi kalimat dan menghitung cosine similarity
     antara teks sitasi (hasil terjemahan) dengan tiap kalimat PDF.
+    Gabungan metode:
+    1. Gabungkan baris yang terputus (line wrapping)
+    2. Gunakan NLTK sent_tokenize
+    3. Fallback ke regex jika NLTK gagal
+    4. (Opsional) Gunakan blok layout PyMuPDF jika value sudah list (hasil blok)
     """
-    def sentence_splitter(text_content):
-        return nltk.tokenize.sent_tokenize(text_content)
-    return _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, sentence_splitter)
+    import re
+    def robust_sentence_splitter(text_content):
+        # Jika value sudah list (misal hasil blok layout), gabungkan lalu proses per blok
+        if isinstance(text_content, list):
+            sentences = []
+            for block in text_content:
+                sentences.extend(robust_sentence_splitter(block))
+            return sentences
+        # Gabungkan baris yang terputus (line wrapping)
+        lines = text_content.split('\n')
+        joined = ""
+        for line in lines:
+            line = line.strip()
+            if not line:
+                joined += "\n"
+                continue
+            # Jika baris kemungkinan judul/subjudul (huruf besar semua, atau panjang < 80 dan tidak diakhiri tanda baca)
+            if (len(line) < 80 and not re.search(r'[.!?…:;\"”\']$', line) and
+                (line.isupper() or line.istitle() or re.match(r'^[A-Z][A-Z\s\-0-9]+$', line))):
+                if joined:
+                    joined += "\n"
+                joined += line + "\n"  # Pisahkan judul/subjudul sebagai paragraf/kalimat sendiri
+                continue
+            if joined and not re.search(r'[.!?…:;\"”\']$', joined.strip()):
+                joined += ' ' + line
+            else:
+                joined += '\n' + line
+        # Tokenisasi kalimat per paragraf
+        sentences = []
+        for para in joined.split('\n'):
+            para = para.strip()
+            if para:
+                # Jika kemungkinan judul/subjudul, masukkan langsung
+                if (len(para) < 80 and not re.search(r'[.!?…:;\"”\']$', para) and
+                    (para.isupper() or para.istitle() or re.match(r'^[A-Z][A-Z\s\-0-9]+$', para))):
+                    sentences.append(para)
+                else:
+                    try:
+                        sentences.extend(nltk.tokenize.sent_tokenize(para))
+                    except Exception:
+                        # Fallback ke regex jika NLTK gagal
+                        sentences.extend([s.strip() for s in re.split(r'(?<=[.!?])\s+', para) if s.strip()])
+        return [s.strip() for s in sentences if s.strip()]
+    return _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, robust_sentence_splitter)
 
 def find_paragraph_matches(citation_text, pages_text, similarity_threshold=0.6, method="tfidf", progress_callback=None):
     """
-    Membagi teks per halaman menjadi paragraf (asumsi paragraf dipisahkan oleh "\\n\\n")
-    dan menghitung cosine similarity antara teks sitasi (hasil terjemahan)
-    dengan tiap paragraf PDF.
+    Mencari kemiripan paragraf. Jika value sudah list (hasil extract_paragraphs_by_page), gunakan langsung,
+    jika string, split dengan dua baris baru/baris kosong.
     """
     def paragraph_splitter(text_content):
-        return [p.strip() for p in text_content.split("\n\n") if p.strip()]
+        import re
+        if isinstance(text_content, list):
+            return [p.strip() for p in text_content if p.strip()]
+        return [p.strip() for p in re.split(r'\n\s*\n', text_content) if p.strip()]
     return _find_matches_generic(citation_text, pages_text, similarity_threshold, method, progress_callback, paragraph_splitter)
+
+def find_crossunit_matches(citation_text, pages_text, similarity_threshold=0.6, method="tfidf", progress_callback=None, window_size=3, unit_mode="paragraph"):
+    """
+    Mencari kemiripan sitasi dengan gabungan beberapa unit (paragraf/kalimat) secara sliding window.
+    - window_size: jumlah unit yang digabungkan per window.
+    - unit_mode: "paragraph" atau "sentence".
+    Returns: list of (page, gabungan_unit, skor)
+    """
+    import re
+    from itertools import chain
+    matches = []
+    total_pages = len(pages_text)
+    semantic_model = None
+    if method == "semantic":
+        semantic_model = get_semantic_model()
+    vectorizer = None
+    if method == "tfidf":
+        vectorizer = TfidfVectorizer()
+    for idx, (page, text) in enumerate(pages_text.items()):
+        # Pilih splitter sesuai mode
+        if unit_mode == "sentence":
+            def splitter(txt):
+                # Gunakan robust_sentence_splitter dari find_sentence_matches
+                import nltk
+                def robust_sentence_splitter(text_content):
+                    if isinstance(text_content, list):
+                        sentences = []
+                        for block in text_content:
+                            sentences.extend(robust_sentence_splitter(block))
+                        return sentences
+                    lines = text_content.split('\n')
+                    joined = ""
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            joined += "\n"
+                            continue
+                        if (len(line) < 80 and not re.search(r'[.!?…:;\"”\']$', line) and
+                            (line.isupper() or line.istitle() or re.match(r'^[A-Z][A-Z\s\-0-9]+$', line))):
+                            if joined:
+                                joined += "\n"
+                            joined += line + "\n"
+                            continue
+                        if joined and not re.search(r'[.!?…:;\"”\']$', joined.strip()):
+                            joined += ' ' + line
+                        else:
+                            joined += '\n' + line
+                    sentences = []
+                    for para in joined.split('\n'):
+                        para = para.strip()
+                        if para:
+                            if (len(para) < 80 and not re.search(r'[.!?…:;\"”\']$', para) and
+                                (para.isupper() or para.istitle() or re.match(r'^[A-Z][A-Z\s\-0-9]+$', para))):
+                                sentences.append(para)
+                            else:
+                                try:
+                                    sentences.extend(nltk.tokenize.sent_tokenize(para))
+                                except Exception:
+                                    sentences.extend([s.strip() for s in re.split(r'(?<=[.!?])\s+', para) if s.strip()])
+                    return [s.strip() for s in sentences if s.strip()]
+                return robust_sentence_splitter(txt)
+        else:
+            def splitter(txt):
+                if isinstance(txt, list):
+                    return [p.strip() for p in txt if p.strip()]
+                return [p.strip() for p in re.split(r'\n\s*\n', txt) if p.strip()]
+        units = splitter(text)
+        if not units or len(units) < window_size:
+            if progress_callback:
+                progress_callback(idx + 1, total_pages)
+            continue
+        # Sliding window
+        for i in range(len(units) - window_size + 1):
+            window_text = " ".join(units[i:i+window_size])
+            if method == "semantic":
+                # Panggil compute_semantic_similarity dengan benar
+                score = float(compute_semantic_similarity(citation_text, window_text, semantic_model))
+                if score >= similarity_threshold:
+                    matches.append((page, window_text, score))
+            else:
+                if vectorizer is None:
+                    vectorizer = TfidfVectorizer()
+                corpus = [citation_text, window_text]
+                vectors = vectorizer.fit_transform(corpus)
+                cos_sim = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
+                if cos_sim >= similarity_threshold:
+                    matches.append((page, window_text, cos_sim))
+        if progress_callback:
+            progress_callback(idx + 1, total_pages)
+    return matches

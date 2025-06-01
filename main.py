@@ -3,7 +3,7 @@ from handlers import process_pdf, validate_pdf
 import streamlit as st
 from utils.translation_utils import translate_text_from_ID_to_EN, translate_text_from_EN_to_ID
 from utils.pdf_utils import extract_text_by_page
-from utils.similarity_utils import find_sentence_matches, find_paragraph_matches
+from utils.similarity_utils import find_sentence_matches, find_paragraph_matches, find_crossunit_matches
 from utils.docx_utils import extract_text_from_docx
 import os
 
@@ -13,6 +13,15 @@ def run_app():
     # --- SIDEBAR ---
     with st.sidebar:
         threshold, mode, method, use_local, sort_option = sidebar_settings()
+        # Tambahkan pengaturan untuk mode rangkuman/lintas section
+        crossunit_mode = st.checkbox(
+            "Mode Rangkuman/Lintas Section",
+            value=False,
+            help="Aktifkan fitur ini untuk mendeteksi sitasi yang merupakan rangkuman/gabungan dari beberapa kalimat atau paragraf di sumber (sliding window). Cocok untuk sitasi berupa kesimpulan atau parafrase lintas bagian dokumen."
+        )
+        if crossunit_mode:
+            window_size = st.slider("Ukuran Window Gabungan (unit)", 2, 6, 3)
+            unit_mode = st.radio("Unit Gabungan", ["Kalimat", "Paragraf"], index=0)
 
     # --- MAIN LAYOUT ---
     st.markdown("""
@@ -23,6 +32,12 @@ def run_app():
             padding-bottom: 1.2rem !important;
             padding-left: 1.5rem !important;
             padding-right: 1.5rem !important;
+        }
+        /* Perkecil padding horizontal dan atas khusus untuk .st-emotion-cache-zy6yx3 */
+        .st-emotion-cache-zy6yx3 {
+            padding-left: 1.2rem !important;
+            padding-right: 1.2rem !important;
+            padding-top: 1.2rem !important;
         }
         /* Logo Citara di tengah layar */
         .citara-logo-center {
@@ -120,8 +135,27 @@ def run_app():
         """, unsafe_allow_html=True)
         source_lang = st.selectbox("Bahasa Sumber", list(lang_options.keys()), index=0, key="pdf_source_lang")
         uploaded_source = st.file_uploader("Pilih file sumber (PDF atau Word)", type=["pdf", "docx"])
-
-    process = st.button("Proses", use_container_width=True)
+        process = st.button("Proses", use_container_width=True, key="btn-proses")
+        st.markdown("""
+        <style>
+        div[data-testid='stButton'] button#btn-proses {
+            background-color: #1E90FF !important;
+            color: white !important;
+            font-size: 0.95rem !important;
+            padding: 0.35rem 1.2rem !important;
+            border-radius: 6px !important;
+            border: none !important;
+            margin-top: 0.2rem !important;
+            margin-bottom: 0.2rem !important;
+            float: right !important;
+            box-shadow: 0 2px 8px rgba(30,144,255,0.08);
+            transition: background 0.2s;
+        }
+        div[data-testid='stButton'] button#btn-proses:hover {
+            background-color: #156ec0 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
     if process:
         if not citation_text.strip():
@@ -138,7 +172,11 @@ def run_app():
                         st.error(msg)
                         os.unlink(source_path)
                         st.stop()
-                    pages_text = extract_text_by_page(source_path)
+                    if mode == "Paragraf":
+                        from utils.pdf_utils import extract_paragraphs_by_page
+                        pages_text = extract_paragraphs_by_page(source_path)  # dict {halaman: [paragraf, ...]}
+                    else:
+                        pages_text = extract_text_by_page(source_path)
                     if not pages_text:
                         st.error("Tidak dapat mengekstrak teks dari file PDF.")
                         os.unlink(source_path)
@@ -191,6 +229,13 @@ def run_app():
                         method=method.lower(), progress_callback=progress_callback
                     )
                     tipe_cek = "Paragraf"
+                elif 'crossunit_mode' in locals() and crossunit_mode:
+                    matches = find_crossunit_matches(
+                        citation_for_compare, pages_text, similarity_threshold=threshold,
+                        method=method.lower(), progress_callback=progress_callback,
+                        window_size=window_size, unit_mode="sentence" if unit_mode=="Kalimat" else "paragraph"
+                    )
+                    tipe_cek = f"Gabungan {window_size} {unit_mode.lower()}"
                 else:
                     matches = find_sentence_matches(
                         citation_for_compare, pages_text, similarity_threshold=threshold,
